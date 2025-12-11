@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --font-geist-sans: "Geist", "sans-serif";
+  --font-geist-mono: "Geist Mono", "monospace";
+}
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #receipt-print-area,
+  #receipt-print-area * {
+    visibility: visible;
+  }
+
+  #receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: auto;
+    margin: 0mm;
+  }
+}
