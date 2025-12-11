@@ -7,6 +7,7 @@ import Cart from '@/components/Cart';
 import Receipt from '@/components/Receipt';
 import ManualItem from '@/components/ManualItem';
 import UpdateNotification from '@/components/UpdateNotification';
+import InventoryView from '@/components/InventoryView';
 import { Search, PenLine, Package, Barcode, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
 
@@ -18,6 +19,7 @@ interface HeldOrder {
 }
 
 export default function Home() {
+  const [view, setView] = useState<'POS' | 'INVENTORY'>('POS');
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -235,6 +237,10 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cart]);
 
+  if (view === 'INVENTORY') {
+    return <InventoryView onBackToPos={() => setView('POS')} />;
+  }
+
   return (
     <div className="flex h-screen bg-zinc-100 dark:bg-black overflow-hidden font-sans text-zinc-900 dark:text-zinc-100">
       {/* Main Content Area */}
@@ -278,12 +284,12 @@ export default function Home() {
             >
               <PenLine size={16} /> Manual (F2)
             </button>
-            <Link
-              href="/inventory"
+            <button
+              onClick={() => setView('INVENTORY')}
               className="flex items-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors"
             >
               <Package size={16} /> Stock
-            </Link>
+            </button>
             {/* Dashboard button - opens WebView in Electron */}
             {typeof window !== 'undefined' && (window as any).electronAPI?.isElectron ? (
               <button
