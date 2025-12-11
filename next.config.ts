@@ -6,8 +6,9 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true
   },
-  // Required for Electron
-  assetPrefix: process.env.NODE_ENV === 'production' ? './' : undefined,
+  // Required for Electron - use relative paths for all assets
+  assetPrefix: './',
+  basePath: '',
 };
 
 export default nextConfig;
