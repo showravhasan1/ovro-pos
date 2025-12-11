@@ -1,6 +1,6 @@
 {
   "name": "ovro-pos",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Ovro Cloud POS - Motorcycle Workshop Management",
   "author": "Ovro Motors",
   "private": true,
@@ -23,9 +23,8 @@
     },
     "files": [
       "electron/**/*",
-      ".next/**/*",
+      "out/**/*",
       "public/**/*",
-      "node_modules/**/*",
       "package.json"
     ],
     "win": {
@@ -48,7 +47,8 @@
     "publish": {
       "provider": "github",
       "owner": "showravhasan1",
-      "repo": "ovro-pos"
+      "repo": "ovro-pos",
+      "releaseType": "release"
     }
   },
   "dependencies": {
