@@ -47,6 +47,17 @@ export default function UpdateNotification() {
                 setError(err);
                 setIsDownloading(false);
             });
+            api.onUpdateStatus((status: string) => {
+                // You might want to show this status in the UI temporarily or as a toast
+                console.log('Update status:', status);
+                if (status === 'App is up to date') {
+                    // Show a temporary success message or just log it
+                    // For now, let's just ensure we clear any error state
+                    setError(null);
+                    setUpdateAvailable(false);
+                    alert('App is up to date!'); // Simple feedback for now
+                }
+            });
         }
     }, []);
 
