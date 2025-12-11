@@ -1,64 +1,373 @@
+'use client';
 
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Product, CartItem, getProducts, processSale } from '@/lib/api';
+import ProductCard from '@/components/ProductCard';
+import Cart from '@/components/Cart';
+import Receipt from '@/components/Receipt';
+import ManualItem from '@/components/ManualItem';
+import UpdateNotification from '@/components/UpdateNotification';
+import { Search, PenLine, Package, Barcode, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
-import { Store, LayoutDashboard, ArrowRight } from 'lucide-react';
+
+interface HeldOrder {
+  id: string;
+  items: CartItem[];
+  clientName: string;
+  timestamp: Date;
+}
 
 export default function Home() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [showManualItem, setShowManualItem] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState('');
+  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
+  const [skuInput, setSkuInput] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const skuInputRef = useRef<HTMLInputElement>(null);
+
+  const [checkoutDetails, setCheckoutDetails] = useState({
+    clientName: '',
+    clientPhone: '',
+    clientOdo: '',
+    serviceCharge: 0,
+    paymentMethod: 'Cash',
+    discount: 0
+  });
+
+  useEffect(() => {
+    getProducts().then(data => {
+      setProducts(data);
+      setFilteredProducts(data);
+    });
+  }, []);
+
+  useEffect(() => {
+    let result = products;
+    if (selectedCategory !== 'All') {
+      result = result.filter(p => p.category === selectedCategory);
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q)
+      );
+    }
+    setFilteredProducts(result);
+  }, [products, selectedCategory, searchQuery]);
+
+  const categories = ['All', ...Array.from(new Set(products.map(p => p.category)))];
+
+  const addToCart = useCallback((product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.id === product.id);
+      if (existing) {
+        return prev.map(item =>
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      }
+      return [...prev, { ...product, quantity: 1 }];
+    });
+  }, []);
+
+  const updateQuantity = (id: string, delta: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.id === id) {
+        const newQty = Math.max(0, item.quantity + delta);
+        return { ...item, quantity: newQty };
+      }
+      return item;
+    }).filter(item => item.quantity > 0));
+  };
+
+  const updatePrice = (id: string, newPrice: number) => {
+    setCart(prev => prev.map(item =>
+      item.id === id ? { ...item, price: newPrice } : item
+    ));
+  };
+
+  const removeFromCart = (id: string) => {
+    setCart(prev => prev.filter(item => item.id !== id));
+  };
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  const holdOrder = () => {
+    if (cart.length === 0) return;
+    const heldOrder: HeldOrder = {
+      id: `HOLD-${Date.now()}`,
+      items: [...cart],
+      clientName: 'Customer',
+      timestamp: new Date()
+    };
+    setHeldOrders(prev => [...prev, heldOrder]);
+    setCart([]);
+  };
+
+  const recallOrder = () => {
+    if (heldOrders.length === 0) return;
+    const lastHeld = heldOrders[heldOrders.length - 1];
+    setCart(lastHeld.items);
+    setHeldOrders(prev => prev.slice(0, -1));
+  };
+
+  const handleSkuSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!skuInput.trim()) return;
+
+    const product = products.find(p =>
+      p.id.toLowerCase() === skuInput.toLowerCase() ||
+      p.name.toLowerCase().includes(skuInput.toLowerCase())
+    );
+
+    if (product) {
+      addToCart(product);
+      setSkuInput('');
+    }
+  };
+
+  const handleCheckout = async (details: { clientName: string; clientPhone: string; clientOdo: string; serviceCharge: number; paymentMethod: string; discount: number }) => {
+    if (cart.length === 0) return;
+    setCheckoutDetails(details);
+    await processSale(cart);
+
+    // Auto-create reminders for follow-up products
+    if (details.clientName && details.clientPhone) {
+      const followupProducts = [
+        { keyword: 'oil', days: 60 },
+        { keyword: 'filter', days: 90 },
+        { keyword: 'brake', days: 180 },
+        { keyword: 'chain', days: 120 },
+        { keyword: 'service', days: 60 },
+      ];
+
+      const existingReminders = JSON.parse(localStorage.getItem('ovro_reminders') || '[]');
+      const newReminders: Array<{ id: string; clientName: string; clientPhone: string; product: string; saleDate: string; dueDate: string; status: 'pending' }> = [];
+
+      cart.forEach(item => {
+        const matchedProduct = followupProducts.find(fp =>
+          item.name.toLowerCase().includes(fp.keyword)
+        );
+
+        if (matchedProduct) {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + matchedProduct.days);
+
+          newReminders.push({
+            id: `REM-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            clientName: details.clientName,
+            clientPhone: details.clientPhone,
+            product: item.name,
+            saleDate: new Date().toISOString().split('T')[0],
+            dueDate: dueDate.toISOString().split('T')[0],
+            status: 'pending'
+          });
+        }
+      });
+
+      if (newReminders.length > 0) {
+        localStorage.setItem('ovro_reminders', JSON.stringify([...existingReminders, ...newReminders]));
+      }
+    }
+
+    setLastOrderId(Math.random().toString(36).substr(2, 9).toUpperCase());
+    setShowReceipt(true);
+  };
+
+  const handleCloseReceipt = () => {
+    setShowReceipt(false);
+    setCart([]);
+    setCheckoutDetails({ clientName: '', clientPhone: '', clientOdo: '', serviceCharge: 0, paymentMethod: 'Cash', discount: 0 });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        return;
+      }
+
+      if (e.key === 'F1' || e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+
+      if (e.key === 'F2') {
+        e.preventDefault();
+        setShowManualItem(true);
+      }
+
+      if (e.key === 'F3') {
+        e.preventDefault();
+        skuInputRef.current?.focus();
+      }
+
+      if (e.key === 'F8') {
+        e.preventDefault();
+        holdOrder();
+      }
+
+      if (e.key === 'F9') {
+        e.preventDefault();
+        recallOrder();
+      }
+
+      if (e.shiftKey && e.key === 'Enter') {
+        e.preventDefault();
+        const checkoutBtn = document.querySelector('[data-checkout-btn]') as HTMLButtonElement;
+        checkoutBtn?.click();
+      }
+
+      if (e.key === 'Escape') {
+        setShowManualItem(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cart]);
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-zinc-50 dark:bg-black">
-      <div className="text-center max-w-2xl mb-12">
-        <h1 className="text-5xl font-black text-zinc-900 dark:text-white mb-4 tracking-tight">
-          Ovro <span className="text-blue-600">Cloud POS</span>
-        </h1>
-        <p className="text-xl text-zinc-500 dark:text-zinc-400">
-          Advanced workshop management for the modern era.
-        </p>
+    <div className="flex h-screen bg-zinc-100 dark:bg-black overflow-hidden font-sans text-zinc-900 dark:text-zinc-100">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="px-4 py-3 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center gap-3">
+          <span className="text-xl font-black tracking-tight text-zinc-900 dark:text-white flex-shrink-0">
+            Ovro<span className="text-blue-600">POS</span>
+          </span>
+
+          {/* SKU Quick Add */}
+          <form onSubmit={handleSkuSubmit} className="relative w-36">
+            <Barcode className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+            <input
+              ref={skuInputRef}
+              type="text"
+              placeholder="SKU (F3)"
+              value={skuInput}
+              onChange={(e) => setSkuInput(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg bg-zinc-100 dark:bg-zinc-800 border-none focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </form>
+
+          {/* Search */}
+          <div className="relative flex-1 max-w-lg">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search products... (F1)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-zinc-100 dark:bg-zinc-800 border-none focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setShowManualItem(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <PenLine size={16} /> Manual (F2)
+            </button>
+            <Link
+              href="/inventory"
+              className="flex items-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              <Package size={16} /> Stock
+            </Link>
+            {/* Dashboard button - opens WebView in Electron */}
+            {typeof window !== 'undefined' && (window as any).electronAPI?.isElectron ? (
+              <button
+                onClick={() => (window as any).electronAPI.openDashboard()}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <LayoutDashboard size={16} /> Dashboard
+              </button>
+            ) : (
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <LayoutDashboard size={16} /> Dashboard
+              </Link>
+            )}
+          </div>
+        </header>
+
+        {/* Category Filters */}
+        <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 flex gap-2 overflow-x-auto no-scrollbar bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Product Grid - BIGGER */}
+        <main className="flex-1 p-4 overflow-y-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            {filteredProducts.map(product => (
+              <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
+            ))}
+          </div>
+        </main>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl">
-        <Link
-          href="/pos"
-          className="group relative overflow-hidden bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl hover:shadow-2xl hover:border-blue-500/50 transition-all duration-300"
-        >
-          <div className="absolute top-0 right-0 p-32 bg-blue-500/5 blur-[100px] rounded-full group-hover:bg-blue-500/10 transition-colors" />
-
-          <div className="relative z-10">
-            <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
-              <Store size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">Counter Interface</h2>
-            <p className="text-zinc-500 dark:text-zinc-400 mb-6">
-              Fast, keyboard-optimized checkout for processing sales and managing workshop service.
-            </p>
-            <div className="flex items-center text-blue-600 font-semibold group-hover:translate-x-1 transition-transform">
-              Launch POS <ArrowRight size={18} className="ml-2" />
-            </div>
-          </div>
-        </Link>
-
-        <Link
-          href="/dashboard"
-          className="group relative overflow-hidden bg-white dark:bg-zinc-900 p-8 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl hover:shadow-2xl hover:border-purple-500/50 transition-all duration-300"
-        >
-          <div className="absolute top-0 right-0 p-32 bg-purple-500/5 blur-[100px] rounded-full group-hover:bg-purple-500/10 transition-colors" />
-
-          <div className="relative z-10">
-            <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-2xl flex items-center justify-center mb-6">
-              <LayoutDashboard size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">Owner Dashboard</h2>
-            <p className="text-zinc-500 dark:text-zinc-400 mb-6">
-              Track profits, expenses, and business health with detailed analytics and reports.
-            </p>
-            <div className="flex items-center text-purple-600 font-semibold group-hover:translate-x-1 transition-transform">
-              View Analytics <ArrowRight size={18} className="ml-2" />
-            </div>
-          </div>
-        </Link>
+      {/* Sidebar Cart - WIDER */}
+      <div className="w-96 flex-shrink-0">
+        <Cart
+          items={cart}
+          onUpdateQuantity={updateQuantity}
+          onUpdatePrice={updatePrice}
+          onRemove={removeFromCart}
+          onCheckout={handleCheckout}
+          onClearCart={clearCart}
+          onHoldOrder={holdOrder}
+          heldOrdersCount={heldOrders.length}
+          onRecallOrder={recallOrder}
+        />
       </div>
 
-      <footer className="mt-16 text-zinc-400 text-sm">
-        Ovro Cloud POS v0.1.0 • Local Mode
-      </footer>
-    </main>
+      {/* Modals */}
+      {showManualItem && (
+        <ManualItem
+          onAddItem={addToCart}
+          onClose={() => setShowManualItem(false)}
+        />
+      )}
+
+      {showReceipt && (
+        <Receipt
+          items={cart}
+          subtotal={cart.reduce((s, i) => s + (i.price * i.quantity), 0)}
+          serviceCharge={checkoutDetails.serviceCharge}
+          discount={checkoutDetails.discount}
+          total={cart.reduce((s, i) => s + (i.price * i.quantity), 0) - checkoutDetails.discount + checkoutDetails.serviceCharge}
+          clientDetails={checkoutDetails}
+          date={new Date().toLocaleDateString()}
+          orderId={lastOrderId}
+          onClose={handleCloseReceipt}
+        />
+      )}
+
+      {/* Update Notification for Electron */}
+      <UpdateNotification />
+    </div>
   );
 }

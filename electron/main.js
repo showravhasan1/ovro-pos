@@ -51,12 +51,12 @@ function createMainWindow() {
 
     if (isDev) {
         // Development mode - load from Next.js dev server
-        mainWindow.loadURL('http://localhost:3000/pos');
+        mainWindow.loadURL('http://localhost:3000');
         mainWindow.webContents.openDevTools();
     } else {
-        // Production mode - load from exported static files
-        const posPath = path.join(__dirname, '..', 'out', 'pos', 'index.html');
-        mainWindow.loadFile(posPath);
+        // Production mode - load from root (POS is now the home page)
+        const indexPath = path.join(__dirname, '..', 'out', 'index.html');
+        mainWindow.loadFile(indexPath);
     }
 
     mainWindow.once('ready-to-show', () => {
