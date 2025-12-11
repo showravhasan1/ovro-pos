@@ -238,7 +238,13 @@ export default function Home() {
   }, [cart]);
 
   if (view === 'INVENTORY') {
-    return <InventoryView onBackToPos={() => setView('POS')} />;
+    return (
+      <InventoryView
+        products={products}
+        onUpdateProducts={setProducts}
+        onBackToPos={() => setView('POS')}
+      />
+    );
   }
 
   return (

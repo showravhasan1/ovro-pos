@@ -6,11 +6,12 @@ import { Package, Plus, Edit2, Trash2, Save, X, ArrowLeft, Check, AlertTriangle 
 import Link from 'next/link';
 
 interface InventoryViewProps {
+    products: Product[];
+    onUpdateProducts: (products: Product[]) => void;
     onBackToPos: () => void;
 }
 
-export default function InventoryView({ onBackToPos }: InventoryViewProps) {
-    const [products, setProducts] = useState<Product[]>([]);
+export default function InventoryView({ products, onUpdateProducts, onBackToPos }: InventoryViewProps) {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editData, setEditData] = useState<Partial<Product>>({});
     const [showAddForm, setShowAddForm] = useState(false);
@@ -22,10 +23,6 @@ export default function InventoryView({ onBackToPos }: InventoryViewProps) {
         buyPrice: 0,
         stock: 0
     });
-
-    useEffect(() => {
-        getProducts().then(setProducts);
-    }, []);
 
     const handleAddProduct = () => {
         if (!newProduct.name || !newProduct.price) return;
@@ -39,7 +36,7 @@ export default function InventoryView({ onBackToPos }: InventoryViewProps) {
             stock: newProduct.stock || 0
         };
 
-        setProducts(prev => [...prev, product]);
+        onUpdateProducts([...products, product]);
         setNewProduct({ name: '', category: 'Parts', price: 0, buyPrice: 0, stock: 0 });
         setShowAddForm(false);
     };
@@ -51,7 +48,8 @@ export default function InventoryView({ onBackToPos }: InventoryViewProps) {
 
     const saveEdit = () => {
         if (!editingId || !editData) return;
-        setProducts(prev => prev.map(p => p.id === editingId ? { ...p, ...editData } as Product : p));
+        const updatedProducts = products.map(p => p.id === editingId ? { ...p, ...editData } as Product : p);
+        onUpdateProducts(updatedProducts);
         setEditingId(null);
         setEditData({});
     };
@@ -63,7 +61,7 @@ export default function InventoryView({ onBackToPos }: InventoryViewProps) {
 
     const handleDeleteProduct = (id: string) => {
         if (confirm('Delete this product?')) {
-            setProducts(prev => prev.filter(p => p.id !== id));
+            onUpdateProducts(products.filter(p => p.id !== id));
         }
     };
 

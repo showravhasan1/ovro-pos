@@ -29,7 +29,7 @@ export default function Receipt({ items, total, subtotal, serviceCharge, discoun
     }, []);
 
     const handleGoHome = () => {
-        window.location.href = '/';
+        onClose();
     };
 
     return (
