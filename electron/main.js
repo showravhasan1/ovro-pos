@@ -143,7 +143,8 @@ ipcMain.handle('open-dashboard', () => {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true
-        }
+        },
+        backgroundColor: '#ffffff'
     });
 
     dashboardWindow.setMenuBarVisibility(false);

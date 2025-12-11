@@ -8,6 +8,7 @@ import Receipt from '@/components/Receipt';
 import ManualItem from '@/components/ManualItem';
 import UpdateNotification from '@/components/UpdateNotification';
 import InventoryView from '@/components/InventoryView';
+import DashboardView from '@/components/DashboardView';
 import { Search, PenLine, Package, Barcode, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
 
@@ -19,7 +20,7 @@ interface HeldOrder {
 }
 
 export default function Home() {
-  const [view, setView] = useState<'POS' | 'INVENTORY'>('POS');
+  const [view, setView] = useState<'POS' | 'INVENTORY' | 'DASHBOARD'>('POS');
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -247,6 +248,10 @@ export default function Home() {
     );
   }
 
+  if (view === 'DASHBOARD') {
+    return <DashboardView onBackToPos={() => setView('POS')} />;
+  }
+
   return (
     <div className="flex h-screen bg-zinc-100 dark:bg-black overflow-hidden font-sans text-zinc-900 dark:text-zinc-100">
       {/* Main Content Area */}
@@ -379,6 +384,17 @@ export default function Home() {
       )}
 
       {/* Update Notification for Electron */}
+      {/* Dashboard Button (Bottom Left) */}
+      <div className="fixed bottom-4 left-4 z-50">
+        <button
+          onClick={() => setView('DASHBOARD')}
+          className="flex items-center gap-2 bg-zinc-900 text-white px-4 py-3 rounded-xl font-bold hover:bg-zinc-800 transition-colors shadow-lg"
+        >
+          <LayoutDashboard size={20} />
+          <span>Dashboard</span>
+        </button>
+      </div>
+
       <UpdateNotification />
     </div>
   );
